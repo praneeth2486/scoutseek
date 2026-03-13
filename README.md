@@ -12,7 +12,7 @@ A full-stack music platform built with **Spring Boot + React** that allows users
 | Security | Spring Security + JWT                |
 | Database | MySQL 8 (port 3312)                  |
 | Frontend | React 18 + Vite (port 5173)          |
-| Styling  | Custom CSS (dark Spotify-like theme) |
+| Styling  | Custom CSS (dark theme) |
 
 ---
 
