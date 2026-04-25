@@ -46,8 +46,12 @@ public class SongService {
         Path filePath = uploadPath.resolve(filename);
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
-        Set<Artist> artists = new HashSet<>(artistRepository.findAllById(artistIds));
-        Set<Genre> genres = new HashSet<>(genreRepository.findAllById(genreIds));
+        // Deduplicate IDs before fetching
+        List<Integer> uniqueArtistIds = artistIds.stream().distinct().collect(Collectors.toList());
+        List<Integer> uniqueGenreIds  = genreIds.stream().distinct().collect(Collectors.toList());
+
+        Set<Artist> artists = new HashSet<>(artistRepository.findAllById(uniqueArtistIds));
+        Set<Genre>  genres  = new HashSet<>(genreRepository.findAllById(uniqueGenreIds));
 
         Song song = Song.builder()
                 .title(title)
@@ -98,12 +102,26 @@ public class SongService {
         dto.setDurationSeconds(song.getDurationSeconds());
         dto.setReleaseDate(song.getReleaseDate());
         dto.setFilePath(song.getFilePath());
+
+        // Use LinkedHashMap to deduplicate by ID while preserving order
         dto.setArtists(song.getArtists().stream()
-                .map(a -> new ArtistDTO(a.getArtistId(), a.getName()))
+                .collect(Collectors.toMap(
+                        Artist::getArtistId,
+                        a -> new ArtistDTO(a.getArtistId(), a.getName()),
+                        (a, b) -> a,
+                        LinkedHashMap::new))
+                .values().stream()
                 .collect(Collectors.toList()));
+
         dto.setGenres(song.getGenres().stream()
-                .map(g -> new GenreDTO(g.getGenreId(), g.getName()))
+                .collect(Collectors.toMap(
+                        Genre::getGenreId,
+                        g -> new GenreDTO(g.getGenreId(), g.getName()),
+                        (a, b) -> a,
+                        LinkedHashMap::new))
+                .values().stream()
                 .collect(Collectors.toList()));
+
         return dto;
     }
 }

@@ -8,6 +8,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RestController
@@ -32,7 +33,29 @@ public class GenreController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<GenreDTO>> createGenre(@RequestBody GenreDTO dto) {
-        Genre genre = Genre.builder().name(dto.getName()).isDeleted(false).build();
+        if (dto.getName() == null || dto.getName().trim().isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Genre name cannot be empty"));
+        }
+        String trimmedName = dto.getName().trim();
+
+        // Check for existing genre with the same name (case-insensitive)
+        Optional<Genre> existing = genreRepository.findByNameIgnoreCase(trimmedName);
+        if (existing.isPresent() && !existing.get().getIsDeleted()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Genre '" + trimmedName + "' already exists"));
+        }
+
+        // If it was soft-deleted before, reactivate it
+        if (existing.isPresent() && existing.get().getIsDeleted()) {
+            Genre reactivated = existing.get();
+            reactivated.setIsDeleted(false);
+            reactivated = genreRepository.save(reactivated);
+            return ResponseEntity.ok(ApiResponse.success("Genre created",
+                    new GenreDTO(reactivated.getGenreId(), reactivated.getName())));
+        }
+
+        Genre genre = Genre.builder().name(trimmedName).isDeleted(false).build();
         genre = genreRepository.save(genre);
         return ResponseEntity.ok(ApiResponse.success("Genre created",
                 new GenreDTO(genre.getGenreId(), genre.getName())));

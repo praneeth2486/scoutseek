@@ -8,6 +8,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RestController
@@ -32,7 +33,29 @@ public class ArtistController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<ArtistDTO>> createArtist(@RequestBody ArtistDTO dto) {
-        Artist artist = Artist.builder().name(dto.getName()).isDeleted(false).build();
+        if (dto.getName() == null || dto.getName().trim().isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Artist name cannot be empty"));
+        }
+        String trimmedName = dto.getName().trim();
+
+        // Check for existing artist with the same name (case-insensitive)
+        Optional<Artist> existing = artistRepository.findByNameIgnoreCase(trimmedName);
+        if (existing.isPresent() && !existing.get().getIsDeleted()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Artist '" + trimmedName + "' already exists"));
+        }
+
+        // If it was soft-deleted before, reactivate it
+        if (existing.isPresent() && existing.get().getIsDeleted()) {
+            Artist reactivated = existing.get();
+            reactivated.setIsDeleted(false);
+            reactivated = artistRepository.save(reactivated);
+            return ResponseEntity.ok(ApiResponse.success("Artist created",
+                    new ArtistDTO(reactivated.getArtistId(), reactivated.getName())));
+        }
+
+        Artist artist = Artist.builder().name(trimmedName).isDeleted(false).build();
         artist = artistRepository.save(artist);
         return ResponseEntity.ok(ApiResponse.success("Artist created",
                 new ArtistDTO(artist.getArtistId(), artist.getName())));

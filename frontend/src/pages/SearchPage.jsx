@@ -24,8 +24,18 @@ export default function SearchPage() {
   })
 
   useEffect(() => {
-    artistsApi.getAll().then(r => setArtists(r.data.data || []))
-    genresApi.getAll().then(r => setGenres(r.data.data || []))
+    artistsApi.getAll().then(r => {
+      const list = r.data.data || []
+      // Deduplicate by artistId, then sort A-Z
+      const unique = Array.from(new Map(list.map(a => [a.artistId, a])).values())
+      setArtists(unique.sort((a, b) => a.name.localeCompare(b.name)))
+    })
+    genresApi.getAll().then(r => {
+      const list = r.data.data || []
+      // Deduplicate by genreId, then sort A-Z
+      const unique = Array.from(new Map(list.map(g => [g.genreId, g])).values())
+      setGenres(unique.sort((a, b) => a.name.localeCompare(b.name)))
+    })
     playlistsApi.getAll().catch(() => {}).then(r => setPlaylists(r?.data?.data || []))
   }, [])
 
@@ -48,19 +58,28 @@ export default function SearchPage() {
     }
   }
 
-  const toggleArtist = (id) => {
+  const handleArtistSelect = (e) => {
+    const id = parseInt(e.target.value)
+    if (!id) return
     setFilters(f => ({
       ...f,
-      artistIds: f.artistIds.includes(id) ? f.artistIds.filter(x => x !== id) : [...f.artistIds, id]
+      artistIds: f.artistIds.includes(id) ? f.artistIds : [...f.artistIds, id]
     }))
+    e.target.value = ''
   }
 
-  const toggleGenre = (id) => {
+  const handleGenreSelect = (e) => {
+    const id = parseInt(e.target.value)
+    if (!id) return
     setFilters(f => ({
       ...f,
-      genreIds: f.genreIds.includes(id) ? f.genreIds.filter(x => x !== id) : [...f.genreIds, id]
+      genreIds: f.genreIds.includes(id) ? f.genreIds : [...f.genreIds, id]
     }))
+    e.target.value = ''
   }
+
+  const removeArtist = (id) => setFilters(f => ({ ...f, artistIds: f.artistIds.filter(x => x !== id) }))
+  const removeGenre  = (id) => setFilters(f => ({ ...f, genreIds:  f.genreIds.filter(x => x !== id) }))
 
   const handleAddToPlaylist = async (playlistId, songId) => {
     try {
@@ -72,6 +91,30 @@ export default function SearchPage() {
   }
 
   const clearFilters = () => setFilters({ title: '', minDuration: '', maxDuration: '', artistIds: [], genreIds: [] })
+
+  const activeFilterCount =
+    filters.artistIds.length + filters.genreIds.length +
+    (filters.minDuration ? 1 : 0) + (filters.maxDuration ? 1 : 0)
+
+  const dropdownStyle = {
+    width: '100%',
+    padding: '9px 12px',
+    borderRadius: 8,
+    border: '1px solid var(--border)',
+    background: 'var(--bg-hover)',
+    color: 'var(--text-primary)',
+    fontSize: 13,
+    cursor: 'pointer',
+    outline: 'none',
+  }
+
+  const chipStyle = (color) => ({
+    display: 'inline-flex', alignItems: 'center', gap: 5,
+    padding: '3px 10px', borderRadius: 20, fontSize: 12,
+    background: color === 'green' ? 'rgba(29,185,84,0.15)' : 'rgba(124,77,255,0.15)',
+    color: color === 'green' ? '#1db954' : 'var(--accent-light)',
+    border: `1px solid ${color === 'green' ? 'rgba(29,185,84,0.3)' : 'rgba(124,77,255,0.3)'}`,
+  })
 
   return (
     <div>
@@ -99,9 +142,9 @@ export default function SearchPage() {
           <button className="btn-ghost" onClick={() => setShowFilters(!showFilters)}
             style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid var(--border)', borderRadius: 8, padding: '0 16px' }}>
             <MdTune /> Filters
-            {(filters.artistIds.length + filters.genreIds.length + (filters.minDuration ? 1 : 0) + (filters.maxDuration ? 1 : 0)) > 0 && (
+            {activeFilterCount > 0 && (
               <span style={{ background: 'var(--accent)', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {filters.artistIds.length + filters.genreIds.length + (filters.minDuration ? 1 : 0) + (filters.maxDuration ? 1 : 0)}
+                {activeFilterCount}
               </span>
             )}
           </button>
@@ -118,57 +161,74 @@ export default function SearchPage() {
               <button className="btn-ghost" onClick={clearFilters} style={{ fontSize: 13 }}>Clear all</button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-              {/* Duration */}
-              <div>
-                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 10 }}>
-                  DURATION RANGE (seconds)
-                </label>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input className="input-field" type="number" placeholder="Min (e.g. 120)"
-                    value={filters.minDuration} onChange={e => setFilters({ ...filters, minDuration: e.target.value })} />
-                  <span style={{ color: 'var(--text-muted)' }}>—</span>
-                  <input className="input-field" type="number" placeholder="Max (e.g. 300)"
-                    value={filters.maxDuration} onChange={e => setFilters({ ...filters, maxDuration: e.target.value })} />
-                </div>
+            {/* Duration */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 10 }}>
+                DURATION RANGE (seconds)
+              </label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', maxWidth: 360 }}>
+                <input className="input-field" type="number" placeholder="Min (e.g. 120)"
+                  value={filters.minDuration} onChange={e => setFilters({ ...filters, minDuration: e.target.value })} />
+                <span style={{ color: 'var(--text-muted)' }}>—</span>
+                <input className="input-field" type="number" placeholder="Max (e.g. 300)"
+                  value={filters.maxDuration} onChange={e => setFilters({ ...filters, maxDuration: e.target.value })} />
               </div>
+            </div>
 
-              {/* Placeholder to balance grid */}
-              <div />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
 
-              {/* Artists */}
+              {/* Artists dropdown */}
               <div>
-                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 10 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 8 }}>
                   ARTISTS (select multiple)
                 </label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <select style={dropdownStyle} onChange={handleArtistSelect} defaultValue="">
+                  <option value="" disabled>— Select an artist —</option>
                   {artists.map(a => (
-                    <button key={a.artistId} onClick={() => toggleArtist(a.artistId)} style={{
-                      padding: '5px 12px', borderRadius: 20, fontSize: 13, cursor: 'pointer', border: 'none',
-                      background: filters.artistIds.includes(a.artistId) ? 'rgba(29,185,84,0.2)' : 'var(--bg-hover)',
-                      color: filters.artistIds.includes(a.artistId) ? '#1db954' : 'var(--text-secondary)',
-                      transition: 'all 0.15s'
-                    }}>{a.name}</button>
+                    <option key={a.artistId} value={a.artistId}>{a.name}</option>
                   ))}
-                </div>
+                </select>
+                {filters.artistIds.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                    {filters.artistIds.map(id => {
+                      const a = artists.find(x => x.artistId === id)
+                      return a ? (
+                        <span key={id} style={chipStyle('green')}>
+                          {a.name}
+                          <MdClose size={13} style={{ cursor: 'pointer' }} onClick={() => removeArtist(id)} />
+                        </span>
+                      ) : null
+                    })}
+                  </div>
+                )}
               </div>
 
-              {/* Genres */}
+              {/* Genres dropdown */}
               <div>
-                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 10 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 8 }}>
                   GENRES (select multiple)
                 </label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <select style={dropdownStyle} onChange={handleGenreSelect} defaultValue="">
+                  <option value="" disabled>— Select a genre —</option>
                   {genres.map(g => (
-                    <button key={g.genreId} onClick={() => toggleGenre(g.genreId)} style={{
-                      padding: '5px 12px', borderRadius: 20, fontSize: 13, cursor: 'pointer', border: 'none',
-                      background: filters.genreIds.includes(g.genreId) ? 'rgba(124,77,255,0.2)' : 'var(--bg-hover)',
-                      color: filters.genreIds.includes(g.genreId) ? 'var(--accent-light)' : 'var(--text-secondary)',
-                      transition: 'all 0.15s'
-                    }}>{g.name}</button>
+                    <option key={g.genreId} value={g.genreId}>{g.name}</option>
                   ))}
-                </div>
+                </select>
+                {filters.genreIds.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                    {filters.genreIds.map(id => {
+                      const g = genres.find(x => x.genreId === id)
+                      return g ? (
+                        <span key={id} style={chipStyle('purple')}>
+                          {g.name}
+                          <MdClose size={13} style={{ cursor: 'pointer' }} onClick={() => removeGenre(id)} />
+                        </span>
+                      ) : null
+                    })}
+                  </div>
+                )}
               </div>
+
             </div>
           </div>
         )}
