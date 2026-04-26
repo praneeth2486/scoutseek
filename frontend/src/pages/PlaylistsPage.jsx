@@ -3,7 +3,8 @@ import { playlistsApi } from '../api'
 import SongRow from '../components/SongRow'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
-import { MdQueueMusic, MdAdd, MdDelete, MdChevronRight, MdArrowBack } from 'react-icons/md'
+import { usePlayer } from '../context/PlayerContext'
+import { MdQueueMusic, MdAdd, MdDelete, MdChevronRight, MdArrowBack, MdPlayArrow } from 'react-icons/md'
 
 export default function PlaylistsPage() {
   const [playlists, setPlaylists] = useState([])
@@ -12,6 +13,7 @@ export default function PlaylistsPage() {
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const { toast, showToast } = useToast()
+  const { playSong } = usePlayer()
 
   const fetchPlaylists = async () => {
     try {
@@ -51,9 +53,9 @@ export default function PlaylistsPage() {
     }
   }
 
-  const handleRemoveSong = async (playlistId, songId) => {
+  const handleRemoveSong = async (songId) => {
     try {
-      const res = await playlistsApi.removeSong(playlistId, songId)
+      const res = await playlistsApi.removeSong(selected.playlistId, songId)
       setSelected(res.data.data)
       showToast('Song removed')
       fetchPlaylists()
@@ -62,25 +64,44 @@ export default function PlaylistsPage() {
     }
   }
 
+  const handleOpenPlaylist = async (pl) => {
+    try {
+      const res = await playlistsApi.getById(pl.playlistId)
+      setSelected(res.data.data)
+    } catch {
+      setSelected(pl)
+    }
+  }
+
+  // ── Playlist detail view ──
   if (selected) {
+    const songs = selected.songs || []
     return (
       <div>
         <div className="page-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button className="btn-icon" onClick={() => setSelected(null)}>
             <MdArrowBack size={20} />
           </button>
-          <div>
+          <div style={{ flex: 1 }}>
             <h1>{selected.name}</h1>
             <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 2 }}>
-              {selected.songs?.length || 0} songs
+              {songs.length} song{songs.length !== 1 ? 's' : ''}
             </p>
           </div>
+          {songs.length > 0 && (
+            <button className="btn-primary"
+              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+              onClick={() => playSong(songs[0], songs)}>
+              <MdPlayArrow size={20} /> Play All
+            </button>
+          )}
         </div>
+
         <div className="page-content">
-          {selected.songs?.length === 0 ? (
+          {songs.length === 0 ? (
             <div className="empty-state">
               <MdQueueMusic size={48} />
-              <span>No songs in this playlist</span>
+              <span>No songs in this playlist yet</span>
             </div>
           ) : (
             <div className="card" style={{ overflow: 'hidden' }}>
@@ -92,25 +113,19 @@ export default function PlaylistsPage() {
                     <th>Artist</th>
                     <th>Genre</th>
                     <th>Duration</th>
-                    <th style={{ width: 80 }}>Remove</th>
+                    <th style={{ width: 48 }}></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {selected.songs?.map((song, i) => (
-                    <tr key={song.songId}>
-                      <td style={{ width: 48 }}>{i + 1}</td>
-                      <td>{song.title}</td>
-                      <td>{song.artists?.map(a => a.name).join(', ')}</td>
-                      <td>{song.genres?.map(g => g.name).join(', ')}</td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                        {song.durationSeconds ? `${Math.floor(song.durationSeconds/60)}:${(song.durationSeconds%60).toString().padStart(2,'0')}` : '--'}
-                      </td>
-                      <td>
-                        <button className="btn-danger" onClick={() => handleRemoveSong(selected.playlistId, song.songId)}>
-                          Remove
-                        </button>
-                      </td>
-                    </tr>
+                  {songs.map((song, i) => (
+                    <SongRow
+                      key={song.songId}
+                      song={song}
+                      index={i}
+                      songs={songs}
+                      playlists={[]}
+                      onDelete={() => handleRemoveSong(song.songId)}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -122,6 +137,7 @@ export default function PlaylistsPage() {
     )
   }
 
+  // ── Playlists list view ──
   return (
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -176,8 +192,9 @@ export default function PlaylistsPage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                  <button className="btn-primary" style={{ flex: 1, fontSize: 13, padding: '8px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                    onClick={() => setSelected(pl)}>
+                  <button className="btn-primary"
+                    style={{ flex: 1, fontSize: 13, padding: '8px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                    onClick={() => handleOpenPlaylist(pl)}>
                     Open <MdChevronRight />
                   </button>
                   <button className="btn-danger" onClick={() => handleDelete(pl.playlistId)} style={{ padding: '8px 12px' }}>
